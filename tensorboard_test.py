@@ -124,7 +124,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback,  StopTrainingOnNoModelImprovement
 
 class MarsRoverEnv(gym.Env):
     def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (0, 0), goal = (149, 349), kd=1.0, kh=30.0, kr=15.0):
@@ -201,22 +201,32 @@ check_env(env)
 
 from stable_baselines3 import PPO
 
-# Initialize the environment
-env = MarsRoverEnv()
 
-# Create the PPO model
-model = PPO('MlpPolicy', env, verbose=1)
+env = DummyVecEnv([lambda: Monitor(MarsRoverEnv())])
+model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="ppo_logs")
+
+# # Initialize the environment
+# env = MarsRoverEnv()
+
+# # Create the PPO model
+# model = PPO('MlpPolicy', env, verbose=1)
+timesteps = 20000
+# stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=3, min_evals=50, verbose=1)
+# eval_callback = EvalCallback(env, eval_freq=10000, callback_after_eval=stop_train_callback, verbose=1)
+
+# eval_callback = EvalCallback(env, best_model_save_path='logs', log_path='logs', eval_freq=10000,deterministic=True, render=False)
+# results=model.learn(total_timesteps=timesteps, callback=eval_callback)
 
 # Train the model
 # Monitor performance metrics
-timesteps = 500000
+timesteps = 10000
 # results = model.learn(total_timesteps=timesteps)
 
 # Save the model
-# model.save(f"ppo_mars_rover_{timesteps}")
+# model.save(f"ppo_mars_rover_{timesteps}_tensorboard")
 
 # Load the model
-model = PPO.load(f"ppo_mars_rover_{timesteps}")
+model = PPO.load(f"ppo_mars_rover_{timesteps}_tensorboard")
 
 # Evaluate the trained model
 obs, _ = env.reset()
