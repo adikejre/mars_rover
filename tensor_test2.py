@@ -137,8 +137,9 @@ class MarsRoverEnv(gym.Env):
         self.kr = kr
         self.terrain = dem_data_subset_cleaned
         self.state = start
+        self.visited_cells = set()  
         self.previous_distance = np.linalg.norm(np.array(start) - np.array(goal))
-        self.step_penalty = -0.5 
+        self.step_penalty = -1 
         
         self.action_space = spaces.Discrete(8)  # 8 possible movements (up, down, left, right, and diagonals)
         self.observation_space = spaces.Box(low=0, high=max(grid_size), shape=(2,), dtype=np.int64)
@@ -146,6 +147,7 @@ class MarsRoverEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.state = self.start
+        self.visited_cells = set()
         self.previous_distance = np.linalg.norm(np.array(self.start) - np.array(self.goal))
         return np.array(self.state, dtype=np.int64), {}
 
@@ -160,6 +162,12 @@ class MarsRoverEnv(gym.Env):
             # print( f"Energy Cost: {energy_cost}")
             # print(f"Distance reward: {distance_reward}")
             reward = -energy_cost + distance_reward + self.step_penalty
+            if self.state in self.visited_cells:
+                reward = -15 
+
+            else:
+                self.visited_cells.add(self.state)
+
             self.previous_distance = current_distance
             self.state = next_state
 
@@ -169,7 +177,7 @@ class MarsRoverEnv(gym.Env):
             else:
                 terminated = False
         else:
-            reward = -50  # Penalty for invalid moves
+            reward = -30  # Penalty for invalid moves
             terminated = False
 
         truncated = False  # No truncation in this case
@@ -205,18 +213,18 @@ from stable_baselines3 import PPO
 env = MarsRoverEnv()
 
 # Create the PPO model
-model = PPO('MlpPolicy', env, verbose=1)
+model = PPO('MlpPolicy', env, verbose=1, tensorboard_log="ppo_logs")
 
 # Train the model
 # Monitor performance metrics
-timesteps = 500000
-# results = model.learn(total_timesteps=timesteps)
+timesteps = 3000000
+results = model.learn(total_timesteps=timesteps)
 
 # Save the model
-# model.save(f"ppo_mars_rover_{timesteps}")
+model.save(f"ppo_mars_rover_{timesteps}_test")
 
 # Load the model
-model = PPO.load(f"ppo_mars_rover_{timesteps}")
+model = PPO.load(f"ppo_mars_rover_{timesteps}_test")
 
 # Evaluate the trained model
 obs, _ = env.reset()
