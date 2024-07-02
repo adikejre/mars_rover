@@ -210,48 +210,29 @@ check_env(env)
 
 import os
 
-class CustomCallback(BaseCallback):
-    def __init__(self, eval_env, eval_freq, log_path, verbose=1):
-        super(CustomCallback, self).__init__(verbose)
-        self.eval_env = eval_env
+class SaveOnBestTrainingRewardCallback(BaseCallback):
+    def __init__(self, eval_freq: int, log_path: str, verbose=1):
+        super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.eval_freq = eval_freq
         self.log_path = log_path
+        self.save_path = os.path.join(log_path, 'best_model')
         self.best_mean_reward = -np.inf
 
-    def _init_callback(self):
-        if self.log_path is not None:
-            os.makedirs(self.log_path, exist_ok=True)
+    def _init_callback(self) -> None:
+        if self.save_path is not None:
+            os.makedirs(self.save_path, exist_ok=True)
 
     def _on_step(self) -> bool:
         if self.n_calls % self.eval_freq == 0:
-            # mean_reward = np.mean([self.eval_env.step(self.eval_env.action_space.sample())[1] for _ in range(100)])
-            rewards = []
-            obs = self.eval_env.reset()
-            for _ in range(100):
-                action, _ = self.model.predict(obs, deterministic=True)
-                obs, reward, terminated, truncated = self.eval_env.step(action)
-                rewards.append(reward)
-                if terminated or truncated:
-                    obs = self.eval_env.reset()
-            mean_reward = np.mean(rewards)
-
-        
-
-
-            if self.verbose > 0:
-                print(f"Step: {self.n_calls}, Mean reward: {mean_reward}")
-
-            if mean_reward > self.best_mean_reward:
-                self.best_mean_reward = mean_reward
-                print(f"New best mean reward: {self.best_mean_reward}. Saving model to {self.log_path}")
-                self.model.save(os.path.join(self.log_path, 'best_model'))
-
+            ep_info_buffer = self.model.ep_info_buffer
+            if len(ep_info_buffer) > 0 and 'r' in ep_info_buffer[0]:
+                mean_reward = np.mean([ep_info['r'] for ep_info in ep_info_buffer])
+                if mean_reward > self.best_mean_reward:
+                    self.best_mean_reward = mean_reward
+                    self.model.save(os.path.join(self.save_path, 'best_model'))
+                    if self.verbose > 0:
+                        print(f"Saving new best model to {self.save_path} with mean reward {self.best_mean_reward}")
         return True
-
-
-
-
-
 
 # Initialize the environment
 
@@ -261,7 +242,7 @@ env = DummyVecEnv([lambda: Monitor(MarsRoverEnv())])
 # Create the PPO model
 model = PPO('MlpPolicy', env, verbose=1, tensorboard_log="ppo_logs")
 
-eval_callback = CustomCallback(env, eval_freq=2000, log_path="logs")
+eval_callback = SaveOnBestTrainingRewardCallback( eval_freq=2000, log_path="logs")
 
 # eval_callback = EvalCallback(env, best_model_save_path="./logs/",
 #                              log_path="./logs/", eval_freq=500,
@@ -271,14 +252,14 @@ print(eval_callback)
 
 # Train the model
 # Monitor performance metrics
-timesteps = 2000000
+timesteps = 3000000
 results = model.learn(total_timesteps=timesteps, callback=eval_callback)
 
 # Save the model
-model.save(f"ppo_mars_rover_{timesteps}_test")
+model.save(f"ppo_mars_rover_{timesteps}_callback_test")
 
 # Load the model
-model = PPO.load(f"ppo_mars_rover_{timesteps}_test")
+model = PPO.load(f"ppo_mars_rover_{timesteps}_callback_test")
 
 # Evaluate the trained model
 obs, _ = env.reset()
