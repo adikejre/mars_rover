@@ -124,12 +124,13 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback,  StopTrainingOnNoModelImprovement, BaseCallback
 import tensorflow as tf
 
 
 class MarsRoverEnv(gym.Env):
-    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (50, 50), goal = (119, 249), kd=1.0, kh=30.0, kr=15.0):
+    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (10, 10), goal = (120, 339), kd=1.0, kh=30.0, kr=15.0):
         super(MarsRoverEnv, self).__init__()
         self.grid_size = grid_size
         self.start = start
@@ -234,28 +235,28 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 # Initialize the environment
 
 env = MarsRoverEnv()
-
+# env = Monitor(env)
 
 # Create the PPO model
-# model = PPO('MlpPolicy', env, verbose=1, tensorboard_log="ppo_logs")
+model = PPO('MlpPolicy', env, verbose=1, tensorboard_log="ppo_logs")
 
-# eval_callback = SaveOnBestTrainingRewardCallback( eval_freq=2000, log_path="logs")
+eval_callback = SaveOnBestTrainingRewardCallback( eval_freq=2000, log_path="logs2")
 
-# eval_callback = EvalCallback(env, best_model_save_path="./logs/",
-#                              log_path="./logs/", eval_freq=500,
+# eval_callback = EvalCallback(env, best_model_save_path="./logs2/",
+#                              log_path="./logs2/", eval_freq=3000,
 #                              deterministic=True, render=False)
 
 
 # Train the model
 # Monitor performance metrics
-# timesteps = 2000
-# results = model.learn(total_timesteps=timesteps)
+timesteps = 5000
+results = model.learn(total_timesteps=timesteps, callback=eval_callback)
 
 # Save the model
-# model.save(f"ppo_mars_rover_{timesteps}_test")
+model.save(f"ppo_mars_rover_{timesteps}_test")
 
 # Load the model
-model = PPO.load(f"best_model")
+model = PPO.load(f"ppo_mars_rover_{timesteps}_test")
 
 # Evaluate the trained model
 obs, _ = env.reset()

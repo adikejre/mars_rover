@@ -1,0 +1,1 @@
+Saving new best model to logs2\best_model_test with mean reward 910.7074352999999
