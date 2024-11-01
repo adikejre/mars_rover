@@ -129,7 +129,7 @@ import tensorflow as tf
 
 
 class MarsRoverEnv(gym.Env):
-    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (50, 50), goal = (20, 300), kd=1.0, kh=30.0, kr=15.0):
+    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (20, 20), goal = (129, 249), kd=0.75, kh=20.0, kr=10.0):
         super(MarsRoverEnv, self).__init__()
         self.grid_size = grid_size
         self.start = start
@@ -166,16 +166,18 @@ class MarsRoverEnv(gym.Env):
             # print(f"Distance reward: {distance_reward}")
             reward = -energy_cost + distance_reward + self.step_penalty
             if self.state in self.visited_cells:
-                reward = -15 
+                reward -= 15 
 
             else:
                 self.visited_cells.add(self.state)
+                reward += 5
+
 
             self.previous_distance = current_distance
             self.state = next_state
 
             if next_state == self.goal:
-                reward += 200  # Large reward for reaching the goal
+                reward += 500  # Large reward for reaching the goal
                 terminated = True
             else:
                 terminated = False
@@ -260,7 +262,9 @@ env = MarsRoverEnv()
 # model.save(f"ppo_mars_rover_{timesteps}_test")
 
 # Load the model
-model = PPO.load("best_model_test")
+# model = PPO.load("randomized_200000_test")
+model = PPO.load(f"logs/best_model/best_model")
+
 # PPo38
 # Evaluate the trained model
 obs, _ = env.reset()

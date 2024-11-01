@@ -1,4 +1,5 @@
 import rasterio
+import random
 import numpy as np
 
 
@@ -129,7 +130,7 @@ import tensorflow as tf
 
 
 class MarsRoverEnv(gym.Env):
-    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (20, 320), goal = (140, 10), kd=0.75, kh=20.0, kr=10.0):
+    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (5, 5), goal = (149, 349), kd=0.75, kh=20.0, kr=10.0, checkpoints=[(20,20),(80,20),(120,200),(100,180),(90,150),(50,300)]):
         super(MarsRoverEnv, self).__init__()
         self.grid_size = grid_size
         self.start = start
@@ -137,6 +138,7 @@ class MarsRoverEnv(gym.Env):
         self.kd = kd
         self.kh = kh
         self.kr = kr
+        self.checkpoints = checkpoints
         self.terrain = dem_data_subset_cleaned
         self.state = start
         self.visited_cells = set()  
@@ -148,14 +150,10 @@ class MarsRoverEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        # self.start = np.random.randint(0, self.grid_size[0]), np.random.randint(0, self.grid_size[1])
         self.state = self.start
         self.visited_cells = set()
         self.visited_cells.add(self.state)
-        # self.goal = (149,348)
-        # self.previous_distance = np.linalg.norm(np.array(self.start) - np.array(self.goal))
-        print(f"goals are {self.goal}")
-        print(f"starts are {self.start}")
+        self.previous_distance = np.linalg.norm(np.array(self.start) - np.array(self.goal))
         return np.array(self.state, dtype=np.int64), {}
 
     def step(self, action):
@@ -164,28 +162,33 @@ class MarsRoverEnv(gym.Env):
         
         if 0 <= next_state[0] < self.grid_size[0] and 0 <= next_state[1] < self.grid_size[1]:
             energy_cost = self.calculate_energy_cost(self.state[0], self.state[1], next_state[0], next_state[1])
+            hazard_cost = self.hazard_cost()
             current_distance = np.linalg.norm(np.array(next_state) - np.array(self.goal))
-            distance_reward = 20.0 * (self.previous_distance - current_distance)
+            distance_reward = 30.0 * (self.previous_distance - current_distance)
             # print( f"Energy Cost: {energy_cost}")
             # print(f"Distance reward: {distance_reward}")
-            reward = -energy_cost + distance_reward + self.step_penalty
+            reward = -energy_cost + distance_reward + self.step_penalty -hazard_cost
             if self.state in self.visited_cells:
-                reward += -15 
+                reward -= 15 
 
             else:
                 self.visited_cells.add(self.state)
-                reward += 5
+                reward += 15
+
+            for cell in self.checkpoints:
+                if(cell == next_state):
+                    reward+=300
 
             self.previous_distance = current_distance
             self.state = next_state
 
             if next_state == self.goal:
-                reward += 500  # Large reward for reaching the goal
+                reward += 600  # Large reward for reaching the goal
                 terminated = True
             else:
                 terminated = False
         else:
-            reward = 30  # Penalty for invalid moves
+            reward = -30  # Penalty for invalid moves
             terminated = False
 
         truncated = False  # No truncation in this case
@@ -200,6 +203,19 @@ class MarsRoverEnv(gym.Env):
             return self.kd * d + self.kh * h  # Uphill movement cost
         else:
             return self.kd * d - self.kr * abs(h)  # Downhill movement cost (with energy regeneration)
+        
+    def hazard_cost(self):
+        hazard_cost = 0
+        rand_num = random.random()
+        
+        # Define probabilistic events and associated costs
+        if rand_num < 0.2:  # 20% chance for rocky terrain
+            hazard_cost += 15
+        elif rand_num < 0.3:  # Additional 10% chance for dust storm
+            hazard_cost += 20
+        elif rand_num < 0.35:  # 5% chance for combined hazards
+            hazard_cost += 30
+        return hazard_cost
 
     def render(self, mode='human'):
         plt.imshow(self.terrain, cmap='terrain', interpolation='bilinear')
@@ -218,7 +234,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.eval_freq = eval_freq
         self.log_path = log_path
-        self.save_path = os.path.join(log_path, 'best_model_randomized')
+        self.save_path = os.path.join(log_path, 'probabilistic_model_test')
         self.best_mean_reward = -np.inf
 
     def _init_callback(self) -> None:
@@ -232,7 +248,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 mean_reward = np.mean([ep_info['r'] for ep_info in ep_info_buffer])
                 if mean_reward > self.best_mean_reward:
                     self.best_mean_reward = mean_reward
-                    self.model.save(os.path.join(self.save_path, 'best_model_randomized'))
+                    self.model.save(os.path.join(self.save_path, 'probabilistic_model_test'))
                     if self.verbose > 0:
                         print(f"Saving new best model to {self.save_path} with mean reward {self.best_mean_reward}")
                         file='bestReward.txt' 
@@ -248,25 +264,25 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 env = MarsRoverEnv()
 
 # Create the PPO model
-model = PPO('MlpPolicy', env, verbose=1, tensorboard_log="ppo_logs")
+model = PPO('MlpPolicy', env, verbose=1, tensorboard_log="ppo_logs_probab")
 
 eval_callback = SaveOnBestTrainingRewardCallback( eval_freq=2000, log_path="logs")
 
+# eval_callback = EvalCallback(env, best_model_save_path="./logs/",
+#                              log_path="./logs/", eval_freq=500,
+#                              deterministic=True, render=False)
 
 # Train the model
 # Monitor performance metrics
-timesteps = 200000
+timesteps = 1500000
 results = model.learn(total_timesteps=timesteps, callback = eval_callback)
 
 # Save the model
-# model.save(f"ppo_mars_rover_{timesteps}_test")
+model.save(f"ppo_mars_rover_{timesteps}_probab_test")
 
-# # Load the model
-# model = PPO.load(f"constant_model", env = env)
-# model.set_env(env)
-# results = model.learn(total_timesteps=timesteps, callback = eval_callback, tb_log_name="ppo_logs")
-model.save(f"randomized_{timesteps}_test")
-
+# Load the model
+# model = PPO.load("randomized_200000_test")
+model = PPO.load(f"logs/probabilistic_model_test/probabilistic_model_test")
 
 # PPo38
 # Evaluate the trained model

@@ -1,1 +1,1 @@
-Saving new best model to logs\best_model with mean reward 43.41489175000005
+Saving new best model to logs\probabilistic_model_test with mean reward 6458.66466099

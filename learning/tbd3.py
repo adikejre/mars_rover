@@ -110,7 +110,7 @@ print(dem_data_subset_cleaned.max())
 print(dem_data_subset_cleaned.min())
 
 
-
+print(dem_data_subset_cleaned.shape)
 
 
 
@@ -129,7 +129,7 @@ import tensorflow as tf
 
 
 class MarsRoverEnv(gym.Env):
-    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (20, 320), goal = (140, 10), kd=0.75, kh=20.0, kr=10.0):
+    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (10, 10), goal = (149, 349), kd=0.5, kh=15.0, kr=8.0):
         super(MarsRoverEnv, self).__init__()
         self.grid_size = grid_size
         self.start = start
@@ -148,14 +148,59 @@ class MarsRoverEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        # self.start = np.random.randint(0, self.grid_size[0]), np.random.randint(0, self.grid_size[1])
+        self.start = np.random.randint(0, self.grid_size[0]), np.random.randint(0, self.grid_size[1])
+        # self.goal = np.random.randint(0, self.grid_size[0]), np.random.randint(0, self.grid_size[1])
+        goal_x = self.goal[0]
+        goal_y = self.goal[1]
+
+        x_displacement = np.random.choice([-1, 1, 0])
+        y_displacement = np.random.choice([-1, 1, 0])
+
+        goal_x += x_displacement
+        goal_y += y_displacement
+
+        if(goal_x < 0):
+            goal_x += 5
+
+        if(goal_x >= 149):
+            goal_x -= 5
+
+        if(goal_y < 0):
+            goal_y += 5
+
+        if(goal_y >= self.grid_size[1]):
+            goal_y -= 5
+
+
+        self.goal = (goal_x, goal_y)       
+        # print(f"start x {self.start[0]}")
+        # print(f"start y {self.start[1]}")
+
+        # self.goal = (149,349)
+        # self.goal = np.random.randint(0, self.grid_size[0]), np.random.randint(0, self.grid_size[1])
+
+        # Choose a goal point at least 50 units but no more than 100 units away in either x or y distance
+        
+        # x_displacement = np.random.randint(50, 140)
+        # y_displacement = np.random.randint(50, 300)
+
+        # goal_x = self.start[0] +  x_displacement
+        # if ( goal_x > self.grid_size[0]):
+        #     goal_x -=  self.grid_size[0]
+
+        # goal_y = self.start[1] + y_displacement
+        # if ( goal_y > self.grid_size[1]):
+        #     goal_y -= self.grid_size[1]
+        
+        
+
+        print(f"goals are {self.goal}")
+            
+
         self.state = self.start
         self.visited_cells = set()
         self.visited_cells.add(self.state)
-        # self.goal = (149,348)
-        # self.previous_distance = np.linalg.norm(np.array(self.start) - np.array(self.goal))
-        print(f"goals are {self.goal}")
-        print(f"starts are {self.start}")
+        self.previous_distance = np.linalg.norm(np.array(self.start) - np.array(self.goal))
         return np.array(self.state, dtype=np.int64), {}
 
     def step(self, action):
@@ -165,7 +210,7 @@ class MarsRoverEnv(gym.Env):
         if 0 <= next_state[0] < self.grid_size[0] and 0 <= next_state[1] < self.grid_size[1]:
             energy_cost = self.calculate_energy_cost(self.state[0], self.state[1], next_state[0], next_state[1])
             current_distance = np.linalg.norm(np.array(next_state) - np.array(self.goal))
-            distance_reward = 20.0 * (self.previous_distance - current_distance)
+            distance_reward = 25.0 * (self.previous_distance - current_distance)
             # print( f"Energy Cost: {energy_cost}")
             # print(f"Distance reward: {distance_reward}")
             reward = -energy_cost + distance_reward + self.step_penalty
@@ -185,7 +230,7 @@ class MarsRoverEnv(gym.Env):
             else:
                 terminated = False
         else:
-            reward = 30  # Penalty for invalid moves
+            reward = -30  # Penalty for invalid moves
             terminated = False
 
         truncated = False  # No truncation in this case
@@ -218,7 +263,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.eval_freq = eval_freq
         self.log_path = log_path
-        self.save_path = os.path.join(log_path, 'best_model_randomized')
+        self.save_path = os.path.join(log_path, 'best_model_delete')
         self.best_mean_reward = -np.inf
 
     def _init_callback(self) -> None:
@@ -232,7 +277,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 mean_reward = np.mean([ep_info['r'] for ep_info in ep_info_buffer])
                 if mean_reward > self.best_mean_reward:
                     self.best_mean_reward = mean_reward
-                    self.model.save(os.path.join(self.save_path, 'best_model_randomized'))
+                    self.model.save(os.path.join(self.save_path, 'best_model_delete'))
                     if self.verbose > 0:
                         print(f"Saving new best model to {self.save_path} with mean reward {self.best_mean_reward}")
                         file='bestReward.txt' 
@@ -244,28 +289,37 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 # Initialize the environment
 
 # env = DummyVecEnv([lambda: Monitor(MarsRoverEnv())])
-
 env = MarsRoverEnv()
+
+
+
 
 # Create the PPO model
 model = PPO('MlpPolicy', env, verbose=1, tensorboard_log="ppo_logs")
 
 eval_callback = SaveOnBestTrainingRewardCallback( eval_freq=2000, log_path="logs")
 
+# eval_callback = EvalCallback(env, best_model_save_path="./logs/",
+#                              log_path="./logs/", eval_freq=500,
+#                              deterministic=True, render=False)
 
 # Train the model
 # Monitor performance metrics
-timesteps = 200000
+timesteps = 3000000
 results = model.learn(total_timesteps=timesteps, callback = eval_callback)
 
 # Save the model
-# model.save(f"ppo_mars_rover_{timesteps}_test")
+model.save(f"ppo_mars_rover_{timesteps}_test")
 
-# # Load the model
+# Load the model
+model = PPO.load(f"logs/best_model_delete/best_model_delete")
+
+
+
 # model = PPO.load(f"constant_model", env = env)
 # model.set_env(env)
 # results = model.learn(total_timesteps=timesteps, callback = eval_callback, tb_log_name="ppo_logs")
-model.save(f"randomized_{timesteps}_test")
+# model.save(f"randomized_{timesteps}_test")
 
 
 # PPo38

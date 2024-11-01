@@ -129,7 +129,7 @@ import tensorflow as tf
 
 
 class MarsRoverEnv(gym.Env):
-    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (20, 20), goal = (149, 349), kd=0.75, kh=20.0, kr=10.0):
+    def __init__(self, grid_size = dem_data_subset_cleaned.shape ,start = (20, 320), goal = (149, 0), kd=0.75, kh=20.0, kr=10.0):
         super(MarsRoverEnv, self).__init__()
         self.grid_size = grid_size
         self.start = start
@@ -240,7 +240,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.eval_freq = eval_freq
         self.log_path = log_path
-        self.save_path = os.path.join(log_path, 'best_model')
+        self.save_path = os.path.join(log_path, 'best_model_delete')
         self.best_mean_reward = -np.inf
 
     def _init_callback(self) -> None:
@@ -254,7 +254,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                 mean_reward = np.mean([ep_info['r'] for ep_info in ep_info_buffer])
                 if mean_reward > self.best_mean_reward:
                     self.best_mean_reward = mean_reward
-                    self.model.save(os.path.join(self.save_path, 'best_model'))
+                    self.model.save(os.path.join(self.save_path, 'best_model_delete'))
                     if self.verbose > 0:
                         print(f"Saving new best model to {self.save_path} with mean reward {self.best_mean_reward}")
                         file='bestReward.txt' 
